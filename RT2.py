@@ -93,8 +93,9 @@ class Light(object):
     self.intensity = intensity
 
 class Material(object):
-  def __init__(self, diffuse):
+  def __init__(self, diffuse, albedo):
     self.diffuse = diffuse
+    self.albedo = albedo
 
 class Intersect(object):
   def __init__(self, distance=0, point=None, normal= None):
@@ -147,7 +148,7 @@ class Render(object):
       self.width = 0
       self.height = 0
       self.framebuffer = []
-      self.change_color = color(0, 0, 0)
+      self.change_color = color2(50,50,200)
       self.filename = filename
       self.x_position = 0
       self.y_position = 0
@@ -189,7 +190,6 @@ class Render(object):
 
     # Writes all the doc
     def glFinish(self):
-      self.render_function()
       self.header()
 
 
@@ -259,70 +259,69 @@ class Render(object):
           threshold += 2 * dx
 
 
-
-# Functions for the snowMan
-    def render_function(self):
-      alfa = int( math.pi / 2)
-      for y in range(self.height):
-        for x in range(self.width):
-          i = ( 2 *(x + 0.5) / self.width - 1) * self.width / self.height * math.tan(alfa / 2)
-          j = ( 1 - 2 *(y + 0.5) / self.height) * math.tan(alfa / 2)
-          direction = norm(V3(i, j, -1))
-          self.framebuffer[y][x] = self.cast_ray(V3(0, 0, 0), direction)
-
-
-
-    def cast_ray(self, origin, dir):
-      impacted_material, impact = self.scene_intersect(origin, dir)
-
-      #no le pega a nada
-      if impacted_material is None:
+    def cast_ray(self, orig, dir):
+      material, impact = self.scene_intersect(orig, dir)
+      if material is None:
         return self.change_color
 
-      #Light
       light_dir = norm(sub(self.light.position, impact.point))
-      intensity  = max(0,dot(light_dir, impact.normal))
+      intensity = self.light.intensity * max(0, dot(light_dir, impact.normal))
 
-      difusse_light = color2(
-        int(impacted_material.diffuse[2] * intensity),
-        int(impacted_material.diffuse[1] * intensity),
-        int(impacted_material.diffuse[0] * intensity),
+      diffuse_light= color2(
+        int(material.diffuse[2] * intensity),
+        int(material.diffuse[1] * intensity),
+        int(material.diffuse[0] * intensity),
       )
 
-      return difusse_light
+      return diffuse_light
 
 
-    def scene_intersect(self, origin, dir):
+    def scene_intersect(self, orig, dir):
       zbuffer = float('inf')
       material = None
       intersect = None
 
       for obj in self.scene:
-        hit = obj.ray_intersect(origin,dir)
+        hit = obj.ray_intersect(orig, dir)
         if hit is not None:
           if hit.distance < zbuffer:
             zbuffer = hit.distance
             material = obj.material
             intersect = hit
 
-
       return material, intersect
 
+
+    def render(self):
+      fun = int(math.pi / 2)
+      for y in range(self.height):
+        for x in range(self.width):
+          i = (2 * (x + 0.5) / self.width - 1) * math.tan(fun / 2) * self.width / self.height
+          j = (2 * (y + 0.5) / self.height - 1) * math.tan(fun / 2)
+          direction = norm(V3(i, j, -1))
+          self.framebuffer[y][x] = self.cast_ray(V3(0, 0, 0), direction)
 
 
 
 # Create --------------------------
-rubber = Material(diffuse=color(0.3, 0, 0))
-ivory = Material(diffuse=color(0.4, 0.4, 0.3))
+rubber = Material(diffuse=color(0.3, 0, 0),albedo=0.9)
+ivory = Material(diffuse=color(0.4, 0.4, 0.3), albedo=0.6)
 
-r = Render('Prueba.bmp')
+r = Render('final.bmp')
 r.glCreateWindow(800,600)
 r.glClear()
-r.light = Light(V3(0.5,0,0), 1)
+
+r.light = Light(
+  position = V3(-50, 20, 20),
+  intensity = 2
+)
+
+
 r.scene = [
   Sphere(V3(0, -1.5, -10), 1.5, ivory),
   Sphere(V3(-2, -1, -12), 2, rubber),
   Sphere(V3(1, 1, -8), 1.7, rubber),
   Sphere(V3(0, 5, -20), 5, ivory)
 ]
+r.render()
 r.glFinish()
