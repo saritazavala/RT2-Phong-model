@@ -25,6 +25,9 @@ def dword(c):
 
 def color(red, green, blue):
      return bytes([round(blue * 255), round(green * 255), round(red * 255)])
+
+def color2(r, g, b):
+  return bytes([b, g, r])
 # --------------------------------------------------
 
 # Math functions ------------------------------------
@@ -84,13 +87,21 @@ def barycentric(A, B, C, P):
 
 # --------------------------------------------------
 
+class Light(object):
+  def __init__(self, position =V3(0,0,0), intensity = 1):
+    self.position = position
+    self.intensity = intensity
+
 class Material(object):
   def __init__(self, diffuse):
     self.diffuse = diffuse
 
 class Intersect(object):
-  def __init__(self, distance=0):
+  def __init__(self, distance=0, point=None, normal= None):
     self.distance = distance
+    self.point = point
+    self.normal = normal
+
 
 # Sphere class
 class Sphere(object):
@@ -118,8 +129,13 @@ class Sphere(object):
     if t0 < 0:
       return None
 
+    hit = sum(orig, mul(direction,t0))
+    normal = norm(sub(hit, self.center))
+
     return Intersect(
-      distance=t0
+      distance=t0,
+      point = hit,
+      normal=normal
     )
 
 # Write a BMP file ---------------------------------
@@ -242,6 +258,8 @@ class Render(object):
           y += 1 if y1 < y2 else -1
           threshold += 2 * dx
 
+
+
 # Functions for the snowMan
     def render_function(self):
       alfa = int( math.pi / 2)
@@ -250,26 +268,47 @@ class Render(object):
           i = ( 2 *(x + 0.5) / self.width - 1) * self.width / self.height * math.tan(alfa / 2)
           j = ( 1 - 2 *(y + 0.5) / self.height) * math.tan(alfa / 2)
           direction = norm(V3(i, j, -1))
-          self.framebuffer[y][x] = self.cast_ray( V3(0, 0, 0), direction)
+          self.framebuffer[y][x] = self.cast_ray(V3(0, 0, 0), direction)
+
+
 
     def cast_ray(self, origin, dir):
-      created = self.scene_intersect(origin, dir)
-      if created:
-        return created.diffuse
-      else:
-        return color(0,0,0)
+      impacted_material, impact = self.scene_intersect(origin, dir)
+
+      #no le pega a nada
+      if impacted_material is None:
+        return self.change_color
+
+      #Light
+      light_dir = norm(sub(self.light.position, impact.point))
+      intensity  = max(0,dot(light_dir, impact.normal))
+
+      difusse_light = color2(
+        int(impacted_material.diffuse[2] * intensity),
+        int(impacted_material.diffuse[1] * intensity),
+        int(impacted_material.diffuse[0] * intensity),
+      )
+
+      return difusse_light
 
 
     def scene_intersect(self, origin, dir):
       zbuffer = float('inf')
       material = None
-      for obj in self.scene:
-        intersect = obj.ray_intersect(origin,dir)
+      intersect = None
 
-        if intersect and intersect.distance < zbuffer:
-          zbuffer = intersect.distance
-          material = obj.material
-      return material
+      for obj in self.scene:
+        hit = obj.ray_intersect(origin,dir)
+        if hit is not None:
+          if hit.distance < zbuffer:
+            zbuffer = hit.distance
+            material = obj.material
+            intersect = hit
+
+
+      return material, intersect
+
+
 
 
 # Create --------------------------
@@ -279,8 +318,11 @@ ivory = Material(diffuse=color(0.4, 0.4, 0.3))
 r = Render('Prueba.bmp')
 r.glCreateWindow(800,600)
 r.glClear()
+r.light = Light(V3(0.5,0,0), 1)
 r.scene = [
-  Sphere(V3(2,-1,-12),-2, rubber),
-  Sphere(V3(0,-1.5,-10),1.5, ivory)
+  Sphere(V3(0, -1.5, -10), 1.5, ivory),
+  Sphere(V3(-2, -1, -12), 2, rubber),
+  Sphere(V3(1, 1, -8), 1.7, rubber),
+  Sphere(V3(0, 5, -20), 5, ivory)
 ]
 r.glFinish()
