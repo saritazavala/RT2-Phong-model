@@ -299,11 +299,12 @@ class Render(object):
 ivory = Material(diffuse=color(100, 100, 80), albedo=(0.6,  0.3), spec=50)
 rubber = Material(diffuse=color(80, 10, 0), albedo=(0.9,  0.1), spec=10)
 brown = Material(diffuse=color(186,91,41), albedo=(0.4,0.2),spec=10)
-light_brown = Material(diffuse=color(235,169,133), albedo=(0.4,0.2),spec=10)
+light_brown = Material(diffuse=color(235,169,133), albedo=(0.4,0.2),spec=11)
 red = Material(diffuse=color(217,41,41), albedo=(0.6,0.3), spec=10)
 green = Material(diffuse=color(177,191,69), albedo=(0.6,0.3), spec=10)
 grey = Material(diffuse=color(221,221,218), albedo=(0.4,0.6), spec=10)
 white = Material(diffuse=color(255,254,255), albedo=(0.6,0.3), spec=10)
+black = Material(diffuse=color(0,0,0), albedo=(0,0), spec=0)
 
 
 r = Render('Lab.bmp')
@@ -312,22 +313,29 @@ r.glClear()
 
 r.light = Light(
   color=color(255,255,255),
-  position = V3(-20, 20, 20),
+  position = V3(0,0, 20),
   intensity = 1.85
 )
 
 
 r.scene = [
 #Brown Bear
-  #ears
+  # Eyes
+  Sphere(V3(2, 2.5, -8), 0.125, black),
+  Sphere(V3(3, 2.5, -8), 0.125, black),
+
+  # ears
   Sphere(V3(2, 3.5, -10), 0.75, brown),
   Sphere(V3(4.5, 3.5, -10), 0.75, brown),
   #
   # #Head
-  Sphere(V3(3, 2.25, -10),1.5, light_brown),
+  Sphere(V3(3, 2.25, -10), 1.5, light_brown),
   #
+
+  # Mouth
+  Sphere(V3(2.5, 1.75, -8), 0.5, brown),
   # #body
-  Sphere(V3(3, -1.15, -10),2.25, red),
+  Sphere(V3(3, -1.15, -10), 2.25, red),
   #
   # #Upper Paws
   Sphere(V3(4.5, 0, -8.5), 0.65, light_brown),
@@ -337,25 +345,36 @@ r.scene = [
   Sphere(V3(3.85, -2, -7.5), 0.75, light_brown),
   Sphere(V3(0.85, -2, -7.5), 0.75, light_brown),
 
+
 #White Bear
 
-  # ears
+#Eyes
+  Sphere(V3(-3.75,2.5,-8),0.125,black),
+  Sphere(V3(-4.75,2.5,-8),0.125,black),
+
+  #Mouth
+  Sphere(V3(-4.25, 1.75, -8),0.5 ,grey),
+
+
+  # # ears
   Sphere(V3(-6.5, 3.5, -10), 0.75, white),
   Sphere(V3(-3.5, 3.5, -10), 0.75, white),
-
-  # Head
+  #
+  # # Head
   Sphere(V3(-5, 2.25, -10), 1.5, white),
-
-  # body
+  #
+  # # body
   Sphere(V3(-5, -1.15, -10), 2.25, grey),
-
-  # Upper Paws
+  #
+  # # Upper Paws
   Sphere(V3(-2.5, 0, -8.5), 0.65, white),
   Sphere(V3(-6.5, 0, -8.25), 0.65, white),
-
-  # Lower paws
+  #
+  # # Lower paws
   Sphere(V3(-2.75, -2, -7.5), 0.75, white),
   Sphere(V3(-5.15, -2, -7.5), 0.75, white),
+  #
+
 
 
 ]
