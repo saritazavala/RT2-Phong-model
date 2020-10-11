@@ -6,10 +6,10 @@
 import struct
 from collections import namedtuple
 import math
+from lib import *
 
 
-V2 = namedtuple('Vertex2', ['x', 'y'])
-V3 = namedtuple('Vertex3', ['x', 'y', 'z'])
+
 
 # Struct Functions ---------------------------------
 def char(c):
@@ -23,79 +23,50 @@ def word(c):
 def dword(c):
     return struct.pack('=l', c)
 
-def color(red, green, blue):
-     return bytes([round(blue * 255), round(green * 255), round(red * 255)])
-
-def color2(r, g, b):
-  return bytes([b, g, r])
 # --------------------------------------------------
 
-# Math functions ------------------------------------
+class color(object):
+  def __init__(self,r,g,b):
+    self.r = r
+    self.g = g
+    self.b = b
 
-def sum(v0, v1):
-  return V3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z)
+  def __add__(self, other_color):
+    r = self.r + other_color.r
+    g = self.g + other_color.g
+    b = self.b + other_color.b
 
-def sub(v0, v1):
-  return V3(v0.x - v1.x, v0.y - v1.y, v0.z - v1.z)
+    return color(r,g,b)
 
-def mul(v0, k):
-  return V3(v0.x * k, v0.y * k, v0.z *k)
+  def __mul__(self, other):
+    r = self.r * other
+    g = self.g * other
+    b = self.b * other
 
-def dot(v0, v1):
-  return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z
+    return color(r,g,b)
+  __rmul__ = __mul__
 
-def cross(v1, v2):
-  return V3(
-    v1.y * v2.z - v1.z * v2.y,
-    v1.z * v2.x - v1.x * v2.z,
-    v1.x * v2.y - v1.y * v2.x,
-  )
+  def __repr__(self):
+    return "color(%s, %s, %s)" % (self.r, self.g,self.b)
 
-def length(v0):
-  return (v0.x**2 + v0.y**2 + v0.z**2)**0.5
-
-def norm(v0):
-  v0length = length(v0)
-
-  if not v0length:
-    return V3(0, 0, 0)
-
-  return V3(v0.x/v0length, v0.y/v0length, v0.z/v0length)
-
-def bbox(*vertices):
-
-  xs = [ vertex.x for vertex in vertices ]
-  ys = [ vertex.y for vertex in vertices ]
-
-  return (max(xs), max(ys), min(xs), min(ys))
-
-def barycentric(A, B, C, P):
-  cx, cy, cz = cross(
-    V3(B.x - A.x, C.x - A.x, A.x - P.x),
-    V3(B.y - A.y, C.y - A.y, A.y - P.y)
-  )
-
-  if abs(cz) < 1:
-    return -1, -1, -1
-
-
-  u = cx/cz
-  v = cy/cz
-  w = 1 - (cx + cy)/cz
-
-  return w, v, u
-
-# --------------------------------------------------
+  def toBytes(self):
+    self.r = int(max(min(self.r, 255), 0))
+    self.g = int(max(min(self.g, 255), 0))
+    self.b = int(max(min(self.b, 255), 0))
+    return bytes([self.b,self.g,self.r])
 
 class Light(object):
-  def __init__(self, position =V3(0,0,0), intensity = 1):
+  def __init__(self, color =color(255,255,255),position =V3(0,0,0), intensity = 1):
+    self.color = color
     self.position = position
     self.intensity = intensity
 
+
 class Material(object):
-  def __init__(self, diffuse, albedo):
+  def __init__(self, diffuse =color(255,255,255), albedo=(1,0), spec=0):
     self.diffuse = diffuse
     self.albedo = albedo
+    self.spec = spec
 
 class Intersect(object):
   def __init__(self, distance=0, point=None, normal= None):
@@ -145,10 +116,12 @@ class Render(object):
     # Initial values -------------------------------
 
     def __init__(self, filename):
+      self.scene = []
       self.width = 0
+      self.light = None
       self.height = 0
       self.framebuffer = []
-      self.change_color = color2(50,50,200)
+      self.change_color = color(236,235,234)
       self.filename = filename
       self.x_position = 0
       self.y_position = 0
@@ -185,7 +158,7 @@ class Render(object):
       # Image ----------------------------------
       for x in range(self.height):
         for y in range(self.width):
-          doc.write(self.framebuffer[x][y])
+          doc.write(self.framebuffer[x][y].toBytes())
       doc.close()
 
     # Writes all the doc
@@ -258,22 +231,40 @@ class Render(object):
           y += 1 if y1 < y2 else -1
           threshold += 2 * dx
 
+    def cast_ray(self, orig, direction):
+      material, impact = self.scene_intersect(orig, direction)
 
-    def cast_ray(self, orig, dir):
-      material, impact = self.scene_intersect(orig, dir)
       if material is None:
         return self.change_color
 
       light_dir = norm(sub(self.light.position, impact.point))
-      intensity = self.light.intensity * max(0, dot(light_dir, impact.normal))
+      light_distance = length(sub(self.light.position, impact.point))
 
-      diffuse_light= color2(
-        int(material.diffuse[2] * intensity),
-        int(material.diffuse[1] * intensity),
-        int(material.diffuse[0] * intensity),
+
+      offset_normal = mul(impact.normal, 1.1)
+
+      if dot(light_dir, impact.normal) <0:
+        shadow_origin = sub(impact.point, offset_normal)
+      else:
+        shadow_origin = sum(impact.point, offset_normal)
+
+
+      shadow_material, shadow_intersect = self.scene_intersect(shadow_origin,light_dir)
+      shadow_intensity = 0
+
+      if shadow_intersect and length(sub(shadow_intersect.point, shadow_origin)) < light_distance:
+        shadow_intensity = 0.9
+
+      intensity = self.light.intensity * max(0, dot(light_dir, impact.normal))*(1 - shadow_intensity)
+
+      reflection = reflect(light_dir, impact.normal)
+      specular_intensity = self.light.intensity * (
+              max(0, -dot(reflection, direction)) ** material.spec
       )
 
-      return diffuse_light
+      diffuse = material.diffuse * intensity * material.albedo[0]
+      specular = color(255, 255, 255) * specular_intensity * material.albedo[1]
+      return diffuse + specular
 
 
     def scene_intersect(self, orig, dir):
@@ -304,24 +295,69 @@ class Render(object):
 
 
 # Create --------------------------
-rubber = Material(diffuse=color(0.3, 0, 0),albedo=0.9)
-ivory = Material(diffuse=color(0.4, 0.4, 0.3), albedo=0.6)
 
-r = Render('final.bmp')
-r.glCreateWindow(800,600)
+ivory = Material(diffuse=color(100, 100, 80), albedo=(0.6,  0.3), spec=50)
+rubber = Material(diffuse=color(80, 10, 0), albedo=(0.9,  0.1), spec=10)
+brown = Material(diffuse=color(186,91,41), albedo=(0.4,0.2),spec=10)
+light_brown = Material(diffuse=color(235,169,133), albedo=(0.4,0.2),spec=10)
+red = Material(diffuse=color(217,41,41), albedo=(0.6,0.3), spec=10)
+green = Material(diffuse=color(177,191,69), albedo=(0.6,0.3), spec=10)
+grey = Material(diffuse=color(221,221,218), albedo=(0.4,0.6), spec=10)
+white = Material(diffuse=color(255,254,255), albedo=(0.6,0.3), spec=10)
+
+
+r = Render('Lab.bmp')
+r.glCreateWindow(1000,600)
 r.glClear()
 
 r.light = Light(
-  position = V3(-50, 20, 20),
-  intensity = 2
+  color=color(255,255,255),
+  position = V3(-20, 20, 20),
+  intensity = 1.85
 )
 
 
 r.scene = [
-  Sphere(V3(0, -1.5, -10), 1.5, ivory),
-  Sphere(V3(-2, -1, -12), 2, rubber),
-  Sphere(V3(1, 1, -8), 1.7, rubber),
-  Sphere(V3(0, 5, -20), 5, ivory)
+#Brown Bear
+  #ears
+  Sphere(V3(2, 3.5, -10), 0.75, brown),
+  Sphere(V3(4.5, 3.5, -10), 0.75, brown),
+  #
+  # #Head
+  Sphere(V3(3, 2.25, -10),1.5, light_brown),
+  #
+  # #body
+  Sphere(V3(3, -1.15, -10),2.25, red),
+  #
+  # #Upper Paws
+  Sphere(V3(4.5, 0, -8.5), 0.65, light_brown),
+  Sphere(V3(0.85, 0, -8.5), 0.65, light_brown),
+  #
+  # #Lower paws
+  Sphere(V3(3.85, -2, -7.5), 0.75, light_brown),
+  Sphere(V3(0.85, -2, -7.5), 0.75, light_brown),
+
+#White Bear
+
+  # ears
+  Sphere(V3(-6.5, 3.5, -10), 0.75, white),
+  Sphere(V3(-3.5, 3.5, -10), 0.75, white),
+
+  # Head
+  Sphere(V3(-5, 2.25, -10), 1.5, white),
+
+  # body
+  Sphere(V3(-5, -1.15, -10), 2.25, grey),
+
+  # Upper Paws
+  Sphere(V3(-2.5, 0, -8.5), 0.65, white),
+  Sphere(V3(-6.5, 0, -8.25), 0.65, white),
+
+  # Lower paws
+  Sphere(V3(-2.75, -2, -7.5), 0.75, white),
+  Sphere(V3(-5.15, -2, -7.5), 0.75, white),
+
+
 ]
 r.render()
 r.glFinish()
